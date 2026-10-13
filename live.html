@@ -39,6 +39,7 @@ input,select{width:100%;padding:13px;border-radius:10px;border:1px solid var(--b
 .hint{color:var(--mu);font-size:16px}
 .s2{font-size:22px;font-weight:700;text-align:center;margin-bottom:14px}
 .opt{display:block;width:100%;padding:15px;margin-bottom:10px;border-radius:12px;border:1px solid var(--bd);background:var(--cd);color:var(--tx);font-size:17px;font-weight:600;cursor:pointer}
+.chk{display:flex;gap:10px;align-items:center;color:var(--tx);font-size:14px;margin-top:14px}.chk input{width:auto}
 .opt.sel{border-color:var(--ac);background:#1b2150}
 </style></head>
 <body><main id="app"></main>
@@ -62,66 +63,93 @@ let DB='',ROOM='';
 async function api(p,m='GET',b){try{const r=await fetch(`${DB}/rooms/${ROOM}/${p}.json`,{method:m,body:b===undefined?undefined:JSON.stringify(b)});if(!r.ok)return null;return await r.json()}catch(e){return null}}
 const view=(h,host)=>{app.className=host?'host':'';app.innerHTML='<div class="brand">IMPOSTOR</div>'+h};
 const H=new URLSearchParams(location.hash.slice(1));
-if(H.get('r')&&H.get('d')){ROOM=H.get('r');DB=H.get('d');player()}else hostSetup();
+
+const wake=()=>{try{navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake()});
+let S=null;
+const endInfo=w=>({w,imp:S.ids.filter(i=>S.roles[i]==='i').map(i=>S.names[i]),word:S.word,cat:S.cat});
 
 function hostSetup(){
- let sv='';try{sv=localStorage.getItem('imp_db')||''}catch(e){}
+ wake();let sv='';try{sv=localStorage.getItem('imp_db')||''}catch(e){}
  view(`<div class="card"><label>URL de Firebase Realtime Database</label><input id="db" placeholder="https://tu-proyecto-default-rtdb.firebaseio.com" value="${esc(sv)}">
- <div class="row"><div><label>Impostores</label><input id="k" type="number" min="1" max="10" value="4"></div>
- <div><label>Categoría</label><select id="c"><option value="*">Aleatoria</option>${Object.keys(CATS).map(x=>`<option>${x}</option>`).join('')}</select></div></div>
+ <div class="row"><div><label>Impostores</label><input id="k" type="number" min="1" max="10" value="4"></div><div><label>Segundos por turno (0 = sin límite)</label><input id="sc" type="number" min="0" max="120" value="10"></div></div>
+ <label>Categoría</label><select id="c"><option value="*">Aleatoria</option>${Object.keys(CATS).map(x=>`<option>${x}</option>`).join('')}</select>
+ <label class="chk"><input type="checkbox" id="au"> Pasar turno solo cuando se acabe el tiempo</label>
  <button class="btn" id="go">Crear sala</button><p class="err" id="er"></p></div>`);
  $('#go').onclick=async()=>{
   DB=$('#db').value.trim().replace(/\/+$/,'');ROOM=Math.random().toString(36).slice(2,7).toUpperCase();
-  const k=Math.max(1,+$('#k').value||4),c=$('#c').value;
   if(!/^https:\/\//.test(DB)){$('#er').textContent='Pega la URL completa de tu base de datos.';return}
   const ok=await api('meta','PUT',{phase:'lobby'});
   if(!ok){$('#er').textContent='No pude conectar. Revisa la URL y que las reglas estén en modo de prueba.';return}
   try{localStorage.setItem('imp_db',DB)}catch(e){}
-  lobby(k,c)}}
+  lobby({k:Math.max(1,+$('#k').value||4),sc:Math.max(0,+$('#sc').value||0),au:$('#au').checked,c:$('#c').value})}}
 
-function lobby(k,c){
+function lobby(cfg){
  const link=location.href.split('#')[0]+'#'+new URLSearchParams({r:ROOM,d:DB});
- view(`<div class="row2"><div class="card c"><div id="qr"></div><div class="link">${esc(link)}</div></div>
+ view(`<div class="row2"><div class="card c"><div id="qr"></div><div class="link">${esc(link)}</div>
+ <div class="row"><button class="btn g" id="cp">Copiar link</button><button class="btn g" id="sh">Compartir</button></div></div>
  <div class="card c"><div class="mu">Jugadores conectados</div><div class="num" id="ct">0</div><div class="chips" id="pl" style="justify-content:center"></div><button class="btn" id="st" disabled>Iniciar partida</button></div></div>`,1);
  try{new QRCode($('#qr'),{text:link,width:240,height:240})}catch(e){}
+ $('#cp').onclick=()=>{try{navigator.clipboard.writeText(link);$('#cp').textContent='Copiado'}catch(e){}};
+ if(navigator.share)$('#sh').onclick=()=>navigator.share({title:'Impostor',url:link}).catch(()=>{});else $('#sh').remove();
  let names={};
- const t=setInterval(async()=>{const n=await api('names');if(!n&&Object.keys(names).length)return;names=n||{};const v=Object.values(names);$('#ct').textContent=v.length;$('#pl').innerHTML=v.map(x=>`<span>${esc(x)}</span>`).join('');$('#st').disabled=v.length<Math.max(3,k+2)},2000);
- $('#st').onclick=async()=>{clearInterval(t);
-  const ids=Object.keys(names),kk=Math.min(k,ids.length-2),imp=new Set(shuf(ids).slice(0,kk));
-  const cat=c==='*'?shuf(Object.keys(CATS))[0]:c,word=shuf(CATS[cat])[0],roles={};
-  ids.forEach(i=>roles[i]=imp.has(i)?'i':'c');
-  await api('roles','PUT',roles);
-  await api('meta','PUT',{phase:'play',cat,word,turn:'',turnName:''});
-  game(shuf(ids),names)}}
+ const t=setInterval(async()=>{const n=await api('names');if(!n&&Object.keys(names).length)return;names=n||{};const v=Object.values(names);$('#ct').textContent=v.length;$('#pl').innerHTML=v.map(x=>`<span>${esc(x)}</span>`).join('');$('#st').disabled=v.length<Math.max(3,cfg.k+2)},2000);
+ $('#st').onclick=()=>{clearInterval(t);begin(names,cfg)}}
 
-function game(q,names){let tick=null;
- const setT=i=>api('meta','PATCH',{turn:i||'',turnName:i?names[i]:''});
+async function begin(names,cfg){
+ const ids=Object.keys(names),k=Math.min(cfg.k,ids.length-2),imp=new Set(shuf(ids).slice(0,k));
+ const cat=cfg.c==='*'?shuf(Object.keys(CATS))[0]:cfg.c,word=shuf(CATS[cat])[0],roles={};
+ ids.forEach(i=>roles[i]=imp.has(i)?'i':'c');
+ S={ids,names,roles,dead:{},round:0,N:ids.length,cfg,cat,word,gen:(S?S.gen:0)+1,al:ids};
+ await api('roles','PUT',roles);await api('votes','DELETE');
+ await api('meta','PUT',{phase:'wait',gen:S.gen,round:0,cat,word});
+ round()}
+
+function round(){S.round++;
+ const al=S.ids.filter(i=>!S.dead[i]);S.al=al;
+ api('meta','PATCH',{phase:'play',round:S.round,alive:al.length,impLeft:al.filter(i=>S.roles[i]==='i').length,last:null,end:null,turn:'',turnName:'',nextId:'',nextName:''});
+ game(shuf(al))}
+
+function finish(w){api('meta','PATCH',{phase:'end',end:endInfo(w)});hostEnd(w)}
+function hostEnd(w){const e=endInfo(w);
+ view(`<div class="card c"><div class="mu">${w==='civ'?'Ganan los tripulantes':w==='imp'?'Ganan los impostores':'Partida terminada'}</div><div class="big">Impostores</div><div class="chips" style="justify-content:center">${e.imp.map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu">Categoría: ${esc(e.cat)} · Palabra: <b>${esc(e.word)}</b></div></div>
+ <button class="btn" id="ag">Jugar otra vez con los mismos</button><button class="btn g" onclick="location.reload()">Nueva sala</button>`,1);
+ $('#ag').onclick=()=>begin(S.names,S.cfg)}
+
+function game(q){const{sc,au}=S.cfg;let tick=null;
+ const setT=i=>api('meta','PATCH',{turn:i||'',turnName:i?S.names[i]:'',nextId:q[1]||'',nextName:q[1]?S.names[q[1]]:''});
+ const nx=()=>{q.shift();draw()};
  const draw=()=>{clearInterval(tick);
-  if(!q.length){setT('');view(`<div class="card c"><div class="mu">Turnos terminados</div><div class="big">Hora de votar</div><button class="btn" id="vt">Abrir votación</button></div>`,1);$('#vt').onclick=()=>vote(names);return}
+  if(!q.length){setT('');view(`<div class="card c"><div class="mu">Ronda ${S.round}</div><div class="big">Hora de votar</div><button class="btn" id="vt">Abrir votación</button></div><button class="btn g" id="en">Terminar partida</button>`,1);$('#vt').onclick=vote;$('#en').onclick=()=>finish('stop');return}
   setT(q[0]);
-  view(`<div class="card c"><div class="mu">Turno de</div><div class="turn">${esc(names[q[0]])}</div><div class="mu">Sigue: ${q[1]?esc(names[q[1]]):'nadie'} · Faltan ${q.length}</div><div class="tm" id="tm"></div>
-  <div class="row"><button class="btn" id="nx">Siguiente</button><button class="btn g" id="ps">Pasar turno</button></div></div><button class="btn g" id="vt">Abrir votación ahora</button>`,1);
-  let t=10;const tm=$('#tm');tm.textContent=t+' s';tick=setInterval(()=>{t--;tm.textContent=t>0?t+' s':'Tiempo';if(t<=0)clearInterval(tick)},1000);
-  $('#nx').onclick=()=>{q.shift();draw()};$('#ps').onclick=()=>{q.push(q.shift());draw()};$('#vt').onclick=()=>{clearInterval(tick);vote(names)}};
+  view(`<div class="card c"><div class="mu">Ronda ${S.round} · Vivos ${S.al.length}</div><div class="mu" style="margin-top:8px">Turno de</div><div class="turn">${esc(S.names[q[0]])}</div><div class="mu">Sigue: ${q[1]?esc(S.names[q[1]]):'nadie'} · Faltan ${q.length}</div><div class="tm" id="tm"></div>
+  <div class="row"><button class="btn" id="nx">Siguiente</button><button class="btn g" id="ps">Pasar turno</button></div></div><button class="btn g" id="vt">Abrir votación ahora</button><button class="btn g" id="en">Terminar partida</button>`,1);
+  if(sc>0){let t=sc;const tm=$('#tm');tm.textContent=t+' s';tick=setInterval(()=>{t--;if(t<=0){clearInterval(tick);if(au)nx();else tm.textContent='Tiempo'}else tm.textContent=t+' s'},1000)}
+  $('#nx').onclick=nx;$('#ps').onclick=()=>{q.push(q.shift());draw()};
+  $('#vt').onclick=()=>{clearInterval(tick);vote()};$('#en').onclick=()=>{clearInterval(tick);finish('stop')}};
  document.onkeydown=e=>{if([' ','Enter','ArrowRight'].includes(e.key)&&$('#nx')){e.preventDefault();$('#nx').click()}};
  draw()}
 
-function vote(names){
- document.onkeydown=null;api('meta','PATCH',{phase:'vote'});
- const total=Object.keys(names).length;
- view(`<div class="card c"><div class="mu">Votación en curso</div><div class="big"><span id="vc">0</span> de ${total}</div><div class="bar"><i id="bf"></i></div><button class="btn" id="cl">Cerrar y revelar</button></div>`,1);
- const t=setInterval(async()=>{const v=await api('votes')||{},n=Object.keys(v).length;$('#vc').textContent=n;$('#bf').style.width=Math.min(100,n/total*100)+'%'},2000);
+function vote(){
+ document.onkeydown=null;const tot=S.al.length;
+ api('votes','DELETE').then(()=>api('meta','PATCH',{phase:'vote'}));
+ view(`<div class="card c"><div class="mu">Ronda ${S.round} · Votación</div><div class="big"><span id="vc">0</span> de ${tot}</div><div class="bar"><i id="bf"></i></div><button class="btn" id="cl">Cerrar votación</button></div><button class="btn g" id="en">Terminar partida</button>`,1);
+ const cv=v=>Object.entries(v).filter(([a,b])=>S.ids.includes(a)&&!S.dead[a]&&S.ids.includes(b)&&!S.dead[b]);
+ const t=setInterval(async()=>{const v=await api('votes')||{},n=cv(v).length;$('#vc').textContent=n;$('#bf').style.width=Math.min(100,n/tot*100)+'%'},2000);
+ $('#en').onclick=()=>{clearInterval(t);finish('stop')};
  $('#cl').onclick=async()=>{clearInterval(t);
-  const v=await api('votes')||{},roles=await api('roles')||{},meta=await api('meta')||{},cnt={};
-  Object.values(v).forEach(x=>cnt[x]=(cnt[x]||0)+1);
-  const rank=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]),top=rank[0];
-  const imp=Object.keys(roles).filter(i=>roles[i]==='i').map(i=>names[i]);
-  const res={imp,top:top?names[top]:'',topImp:top?roles[top]==='i':false,word:meta.word,cat:meta.cat};
-  await api('meta','PATCH',{phase:'result',result:res});
-  view(`<div class="card c"><div class="mu">Más votado</div><div class="big">${esc(res.top||'Nadie')}</div>${top?`<div class="${res.topImp?'ok':'bad'}">${res.topImp?'Era impostor':'No era impostor'}</div>`:''}</div>
-  <div class="card"><div class="mu">Impostores</div><div class="chips">${imp.map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu" style="margin-top:14px">Categoría: ${esc(meta.cat)} · Palabra: <b>${esc(meta.word)}</b></div></div>
-  <div class="card"><div class="mu">Votos</div>${rank.map(i=>`<div class="vr"><span>${esc(names[i])}</span><b>${cnt[i]}</b></div>`).join('')||'<div class="mu">Sin votos</div>'}</div>
-  <button class="btn g" onclick="location.reload()">Nueva ronda</button>`,1)}}
+  const v=await api('votes')||{},cnt={};cv(v).forEach(([a,b])=>cnt[b]=(cnt[b]||0)+1);
+  const rank=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]),out=rank.length&&!(rank[1]&&cnt[rank[1]]===cnt[rank[0]])?rank[0]:null;
+  if(out)S.dead[out]=true;
+  const al=S.ids.filter(i=>!S.dead[i]),imps=al.filter(i=>S.roles[i]==='i').length;
+  const win=imps===0?'civ':al.length<=Math.ceil(S.N*.2)?'imp':'';
+  const last={name:out?S.names[out]:'',imp:out?S.roles[out]==='i':false,tie:!out};
+  S.al=al;
+  await api('meta','PATCH',{dead:S.dead,alive:al.length,impLeft:imps,last,phase:win?'end':'round',end:win?endInfo(win):null});
+  const list=rank.map(i=>`<div class="vr"><span>${esc(S.names[i])}</span><b>${cnt[i]}</b></div>`).join('')||'<div class="mu">Sin votos</div>';
+  view(`<div class="card c"><div class="mu">${last.tie?'Empate o sin votos':'Eliminado'}</div><div class="big">${last.tie?'Nadie sale':esc(last.name)}</div>${last.tie?'':`<div class="${last.imp?'ok':'bad'}">${last.imp?'Era impostor':'No era impostor'}</div>`}<div class="mu" style="margin-top:10px">Quedan ${al.length} jugadores · ${imps} impostores</div></div>
+  <div class="card"><div class="mu">Votos</div>${list}</div><button class="btn" id="nr">${win?'Ver resultado final':'Siguiente ronda'}</button><button class="btn g" id="en">Terminar partida</button>`,1);
+  $('#nr').onclick=()=>win?hostEnd(win):round();$('#en').onclick=()=>finish('stop')}}
 
 function player(){
  const kI='imp_id_'+ROOM,kN='imp_n_'+ROOM;let id=null,nm=null;
@@ -134,24 +162,33 @@ function player(){
   if(!ok){$('#er').textContent='No pude conectar. Revisa tu internet e intenta de nuevo.';return}
   try{localStorage.setItem(kI,id);localStorage.setItem(kN,n)}catch(e){}
   nm=n;run()};
- function run(){let shown='',role=null,meta=null,myVote=null;
+ function run(){wake();let key='',role=null,meta=null,myVote=null;
+  const isDead=()=>!!(meta.dead&&meta.dead[id]);
+  const stat=()=>`<p class="s" id="stt">Ronda ${meta.round} · Vivos ${meta.alive} · Impostores ${meta.impLeft}</p>`;
   const card=()=>{const r=$('#r');let to;const imp=role==='i';
    const d=o=>r.innerHTML=o?`<div class="mu">${imp?'Tu rol':'Tu palabra'}</div><div class="sm">${imp?'Impostor':esc(meta.word)}</div><div class="mu">Categoría: ${esc(meta.cat)}</div>`:'<div class="hint">Mantén presionado</div>';
    const sh=e=>{e.preventDefault();d(1);clearTimeout(to);to=setTimeout(()=>d(0),4000)},hd=()=>{d(0);clearTimeout(to)};
    r.addEventListener('pointerdown',sh);['pointerup','pointerleave','pointercancel'].forEach(v=>r.addEventListener(v,hd));r.oncontextmenu=e=>e.preventDefault();d(0)};
-  const render=async()=>{
-   if(shown==='lobby')view(`<div class="card c"><div class="big">Hola, ${esc(nm)}</div><p class="mu">Esperando a que el anfitrión inicie la partida.</p></div>`);
-   else if(shown==='play'){role=await api('roles/'+id);
-    if(!role){view('<div class="card c"><p class="mu">Llegaste después de que empezó la partida. Espera la siguiente ronda.</p></div>');return}
-    view('<div class="banner" id="bn"></div><p class="s">Mantén presionada la tarjeta para ver tu rol.</p><button class="reveal" id="r"></button>');card()}
-   else if(shown==='vote'){const nms=await api('names')||{};
-    view(`<div class="s2">¿Quién es el impostor?</div>${Object.keys(nms).filter(i=>i!==id).map(i=>`<button class="opt${myVote===i?' sel':''}" data-i="${i}">${esc(nms[i])}</button>`).join('')}<p class="mu c" id="vm" style="text-align:center">${myVote?'Voto registrado':'Toca un nombre para votar'}</p>`);
+  const render=async()=>{const p=meta.phase;
+   if(p==='lobby')view(`<div class="card c"><div class="big">Hola, ${esc(nm)}</div><p class="mu">Esperando a que el anfitrión inicie la partida.</p></div>`);
+   else if(p==='play'){role=await api('roles/'+id);
+    if(!role){view('<div class="card c"><p class="mu">Llegaste después de que empezó la partida. Espera la siguiente.</p></div>');return}
+    view(`<div class="banner" id="bn"></div>${stat()}`+(isDead()?'<div class="card c"><div class="big">Estás eliminado</div><p class="mu">Sigue la partida como espectador.</p></div>':'<p class="s">Mantén presionada la tarjeta para ver tu rol.</p><button class="reveal" id="r"></button>'));
+    if(!isDead())card()}
+   else if(p==='vote'){const nms=await api('names')||{};myVote=null;
+    if(!role||isDead()){view(`<div class="card c"><div class="big">${role?'Estás eliminado':'Votación en curso'}</div><p class="mu">Espera el resultado de la votación.</p></div>`);return}
+    view(`<div class="s2">¿Quién es el impostor?</div>${Object.keys(nms).filter(i=>i!==id&&!(meta.dead&&meta.dead[i])).map(i=>`<button class="opt" data-i="${i}">${esc(nms[i])}</button>`).join('')}<p class="mu" id="vm" style="text-align:center">Toca un nombre para votar</p>`);
     document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const ok=await api('votes/'+id,'PUT',b.dataset.i);if(!ok)return;myVote=b.dataset.i;document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b));$('#vm').textContent='Voto registrado. Puedes cambiarlo.'})}
-   else if(shown==='result'){const r=meta.result||{};
-    view(`<div class="card c"><div class="mu">Más votado</div><div class="big">${esc(r.top||'Nadie')}</div>${r.top?`<div class="${r.topImp?'ok':'bad'}">${r.topImp?'Era impostor':'No era impostor'}</div>`:''}</div><div class="card"><div class="mu">Impostores</div><div class="chips">${(r.imp||[]).map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu" style="margin-top:14px">Palabra: <b>${esc(r.word)}</b></div></div>`)}};
+   else if(p==='round'){const l=meta.last||{};
+    view(`<div class="card c"><div class="mu">${l.tie?'Empate o sin votos':'Eliminado'}</div><div class="big">${l.tie?'Nadie sale':esc(l.name)}</div>${l.tie?'':`<div class="${l.imp?'ok':'bad'}">${l.imp?'Era impostor':'No era impostor'}</div>`}</div>${stat()}<p class="mu" style="text-align:center">${isDead()?'Estás eliminado. ':''}Esperando la siguiente ronda.</p>`)}
+   else if(p==='end'){const e=meta.end||{imp:[]};
+    view(`<div class="card c"><div class="mu">${e.w==='civ'?'Ganan los tripulantes':e.w==='imp'?'Ganan los impostores':'Partida terminada'}</div><div class="big">Impostores</div><div class="chips" style="justify-content:center">${(e.imp||[]).map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu">Palabra: <b>${esc(e.word)}</b></div></div><p class="mu" style="text-align:center">Si el anfitrión juega otra vez, esta pantalla se actualiza sola.</p>`)}
+   else view('<div class="card c"><p class="mu">Preparando la partida.</p></div>')};
   const poll=async()=>{const m=await api('meta');if(!m)return;meta=m;
-   if(m.phase!==shown){shown=m.phase;await render()}
-   if(shown==='play'){const b=$('#bn');if(b){const mine=m.turn===id;b.className='banner'+(mine?' me':'');b.textContent=m.turn?(mine?'Es tu turno':'Turno de '+m.turnName):'Preparando turnos'}}};
+   const k=m.phase+':'+m.gen+':'+m.round;
+   if(k!==key){key=k;await render()}
+   if(m.phase==='play'){const b=$('#bn');if(b){const mine=m.turn===id;b.className='banner'+(mine?' me':'');b.innerHTML=(m.turn?(mine?'Es tu turno':'Turno de '+esc(m.turnName)):'Preparando turnos')+(m.nextId?`<div style="font-weight:400;font-size:13px;margin-top:2px">${m.nextId===id?'Sigues tú':'Sigue: '+esc(m.nextName)}</div>`:'')}}};
   poll();setInterval(poll,2000)}
 }
+if(H.get('r')&&H.get('d')){ROOM=H.get('r');DB=H.get('d');player()}else hostSetup();
 </script></body></html>
