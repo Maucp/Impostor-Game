@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Impostor</title>
+<style>
+:root{--bg:#0b0d12;--cd:#141821;--bd:#232938;--tx:#e8eaf0;--mu:#8b93a7;--ac:#6c7bff;--ok:#2fbf71;--bad:#ff5470}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;color:var(--tx);background:radial-gradient(900px 500px at 50% -10%,#1a2040,var(--bg));font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.4}
+main{max-width:520px;margin:0 auto;padding:max(20px,env(safe-area-inset-top)) 16px 40px}
+main.host{max-width:900px}
+.brand{text-align:center;font-weight:800;letter-spacing:.45em;font-size:15px;color:var(--tx);margin:8px 0 24px;padding-left:.45em}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:16px;padding:18px;margin-bottom:14px}
+.c{text-align:center}
+label{display:block;font-size:13px;color:var(--mu);margin:10px 0 6px}
+input,select{width:100%;padding:13px;border-radius:10px;border:1px solid var(--bd);background:#0e1119;color:var(--tx);font-size:16px}
+.btn{width:100%;padding:15px;border:0;border-radius:12px;background:var(--ac);color:#fff;font-weight:700;font-size:16px;margin-top:14px;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.g{background:transparent;border:1px solid var(--bd);color:var(--tx)}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.mu{color:var(--mu);font-size:14px}.s{color:var(--mu);text-align:center;margin:0 0 14px}
+.err{color:var(--bad);font-size:14px;margin:10px 0 0}
+.big{font-size:34px;font-weight:800;margin:6px 0}
+.turn{font-size:clamp(40px,9vw,96px);font-weight:800;line-height:1.05;margin:10px 0;word-break:break-word}
+.num{font-size:56px;font-weight:800}
+.tm{font-size:22px;color:var(--mu);margin:8px 0}
+.link{word-break:break-all;font-size:11px;color:var(--mu);margin-top:8px}
+#qr{display:flex;justify-content:center;padding:12px;background:#fff;border-radius:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chips span{background:#0e1119;border:1px solid var(--bd);border-radius:999px;padding:6px 12px;font-size:14px}
+.bar{height:8px;background:#0e1119;border-radius:99px;overflow:hidden;margin:12px 0}
+.bar i{display:block;height:100%;width:0;background:var(--ac);transition:width .4s}
+.vr{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}
+.banner{text-align:center;padding:14px;border-radius:12px;background:var(--cd);border:1px solid var(--bd);font-weight:700;margin-bottom:12px}
+.banner.me{background:var(--ok);border-color:var(--ok);color:#06210f}
+.reveal{width:100%;min-height:230px;border-radius:18px;border:1px solid var(--bd);background:var(--cd);color:var(--tx);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
+.sm{font-size:30px;font-weight:800;margin:8px 0;word-break:break-word}
+.hint{color:var(--mu);font-size:16px}
+.s2{font-size:22px;font-weight:700;text-align:center;margin-bottom:14px}
+.opt{display:block;width:100%;padding:15px;margin-bottom:10px;border-radius:12px;border:1px solid var(--bd);background:var(--cd);color:var(--tx);font-size:17px;font-weight:600;cursor:pointer}
+.opt.sel{border-color:var(--ac);background:#1b2150}
+</style></head>
+<body><main id="app"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const CATS={
+"Deportes":["Fútbol","Basquetbol","Natación","Box","Tenis","Voleibol","Béisbol","Ciclismo","Lucha libre","Atletismo","Gimnasia","Surf"],
+"Famosos":["Shakira","Bad Bunny","Messi","Cristiano Ronaldo","Eugenio Derbez","Taylor Swift","Peso Pluma","Karol G","Checo Pérez","Canelo Álvarez","Luisito Comunica","Ibai"],
+"Videojuegos":["Minecraft","Fortnite","Mario Kart","FIFA","Among Us","Zelda","Pokémon","Free Fire","League of Legends","GTA","Valorant","Roblox"],
+"Comida":["Tacos al pastor","Pizza","Sushi","Pozole","Hamburguesa","Chilaquiles","Tamales","Helado","Elote","Tortas","Ramen","Enchiladas"],
+"Animales":["Perro","Gato","Ajolote","Delfín","Jirafa","Pingüino","Tiburón","Mapache","Capibara","Pulpo","Loro","Panda"],
+"Películas y series":["Shrek","Coco","Avengers","Harry Potter","Titanic","Breaking Bad","Stranger Things","El Rey León","Spider-Man","Toy Story","Los Simpson","Squid Game"],
+"Anime":["Naruto","Dragon Ball","One Piece","Death Note","Pokémon","Attack on Titan","Demon Slayer","Sailor Moon","Chainsaw Man","My Hero Academia","Bleach","Jujutsu Kaisen"],
+"Lugares":["Playa","Hospital","Escuela","Aeropuerto","Cine","Metro","Zoológico","Gimnasio","Biblioteca","Panadería","Estadio","Tianguis"],
+"Profesiones":["Psicólogo","Doctor","Bombero","Chef","Piloto","Maestro","Policía","Dentista","Youtuber","Veterinario","Electricista","Astronauta"]
+};
+const $=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const shuf=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+let DB='',ROOM='';
+async function api(p,m='GET',b){try{const r=await fetch(`${DB}/rooms/${ROOM}/${p}.json`,{method:m,body:b===undefined?undefined:JSON.stringify(b)});if(!r.ok)return null;return await r.json()}catch(e){return null}}
+const view=(h,host)=>{app.className=host?'host':'';app.innerHTML='<div class="brand">IMPOSTOR</div>'+h};
+const H=new URLSearchParams(location.hash.slice(1));
+if(H.get('r')&&H.get('d')){ROOM=H.get('r');DB=H.get('d');player()}else hostSetup();
+
+function hostSetup(){
+ let sv='';try{sv=localStorage.getItem('imp_db')||''}catch(e){}
+ view(`<div class="card"><label>URL de Firebase Realtime Database</label><input id="db" placeholder="https://tu-proyecto-default-rtdb.firebaseio.com" value="${esc(sv)}">
+ <div class="row"><div><label>Impostores</label><input id="k" type="number" min="1" max="10" value="4"></div>
+ <div><label>Categoría</label><select id="c"><option value="*">Aleatoria</option>${Object.keys(CATS).map(x=>`<option>${x}</option>`).join('')}</select></div></div>
+ <button class="btn" id="go">Crear sala</button><p class="err" id="er"></p></div>`);
+ $('#go').onclick=async()=>{
+  DB=$('#db').value.trim().replace(/\/+$/,'');ROOM=Math.random().toString(36).slice(2,7).toUpperCase();
+  const k=Math.max(1,+$('#k').value||4),c=$('#c').value;
+  if(!/^https:\/\//.test(DB)){$('#er').textContent='Pega la URL completa de tu base de datos.';return}
+  const ok=await api('meta','PUT',{phase:'lobby'});
+  if(!ok){$('#er').textContent='No pude conectar. Revisa la URL y que las reglas estén en modo de prueba.';return}
+  try{localStorage.setItem('imp_db',DB)}catch(e){}
+  lobby(k,c)}}
+
+function lobby(k,c){
+ const link=location.href.split('#')[0]+'#'+new URLSearchParams({r:ROOM,d:DB});
+ view(`<div class="row2"><div class="card c"><div id="qr"></div><div class="link">${esc(link)}</div></div>
+ <div class="card c"><div class="mu">Jugadores conectados</div><div class="num" id="ct">0</div><div class="chips" id="pl" style="justify-content:center"></div><button class="btn" id="st" disabled>Iniciar partida</button></div></div>`,1);
+ try{new QRCode($('#qr'),{text:link,width:240,height:240})}catch(e){}
+ let names={};
+ const t=setInterval(async()=>{const n=await api('names');if(!n&&Object.keys(names).length)return;names=n||{};const v=Object.values(names);$('#ct').textContent=v.length;$('#pl').innerHTML=v.map(x=>`<span>${esc(x)}</span>`).join('');$('#st').disabled=v.length<Math.max(3,k+2)},2000);
+ $('#st').onclick=async()=>{clearInterval(t);
+  const ids=Object.keys(names),kk=Math.min(k,ids.length-2),imp=new Set(shuf(ids).slice(0,kk));
+  const cat=c==='*'?shuf(Object.keys(CATS))[0]:c,word=shuf(CATS[cat])[0],roles={};
+  ids.forEach(i=>roles[i]=imp.has(i)?'i':'c');
+  await api('roles','PUT',roles);
+  await api('meta','PUT',{phase:'play',cat,word,turn:'',turnName:''});
+  game(shuf(ids),names)}}
+
+function game(q,names){let tick=null;
+ const setT=i=>api('meta','PATCH',{turn:i||'',turnName:i?names[i]:''});
+ const draw=()=>{clearInterval(tick);
+  if(!q.length){setT('');view(`<div class="card c"><div class="mu">Turnos terminados</div><div class="big">Hora de votar</div><button class="btn" id="vt">Abrir votación</button></div>`,1);$('#vt').onclick=()=>vote(names);return}
+  setT(q[0]);
+  view(`<div class="card c"><div class="mu">Turno de</div><div class="turn">${esc(names[q[0]])}</div><div class="mu">Sigue: ${q[1]?esc(names[q[1]]):'nadie'} · Faltan ${q.length}</div><div class="tm" id="tm"></div>
+  <div class="row"><button class="btn" id="nx">Siguiente</button><button class="btn g" id="ps">Pasar turno</button></div></div><button class="btn g" id="vt">Abrir votación ahora</button>`,1);
+  let t=10;const tm=$('#tm');tm.textContent=t+' s';tick=setInterval(()=>{t--;tm.textContent=t>0?t+' s':'Tiempo';if(t<=0)clearInterval(tick)},1000);
+  $('#nx').onclick=()=>{q.shift();draw()};$('#ps').onclick=()=>{q.push(q.shift());draw()};$('#vt').onclick=()=>{clearInterval(tick);vote(names)}};
+ document.onkeydown=e=>{if([' ','Enter','ArrowRight'].includes(e.key)&&$('#nx')){e.preventDefault();$('#nx').click()}};
+ draw()}
+
+function vote(names){
+ document.onkeydown=null;api('meta','PATCH',{phase:'vote'});
+ const total=Object.keys(names).length;
+ view(`<div class="card c"><div class="mu">Votación en curso</div><div class="big"><span id="vc">0</span> de ${total}</div><div class="bar"><i id="bf"></i></div><button class="btn" id="cl">Cerrar y revelar</button></div>`,1);
+ const t=setInterval(async()=>{const v=await api('votes')||{},n=Object.keys(v).length;$('#vc').textContent=n;$('#bf').style.width=Math.min(100,n/total*100)+'%'},2000);
+ $('#cl').onclick=async()=>{clearInterval(t);
+  const v=await api('votes')||{},roles=await api('roles')||{},meta=await api('meta')||{},cnt={};
+  Object.values(v).forEach(x=>cnt[x]=(cnt[x]||0)+1);
+  const rank=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]),top=rank[0];
+  const imp=Object.keys(roles).filter(i=>roles[i]==='i').map(i=>names[i]);
+  const res={imp,top:top?names[top]:'',topImp:top?roles[top]==='i':false,word:meta.word,cat:meta.cat};
+  await api('meta','PATCH',{phase:'result',result:res});
+  view(`<div class="card c"><div class="mu">Más votado</div><div class="big">${esc(res.top||'Nadie')}</div>${top?`<div class="${res.topImp?'ok':'bad'}">${res.topImp?'Era impostor':'No era impostor'}</div>`:''}</div>
+  <div class="card"><div class="mu">Impostores</div><div class="chips">${imp.map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu" style="margin-top:14px">Categoría: ${esc(meta.cat)} · Palabra: <b>${esc(meta.word)}</b></div></div>
+  <div class="card"><div class="mu">Votos</div>${rank.map(i=>`<div class="vr"><span>${esc(names[i])}</span><b>${cnt[i]}</b></div>`).join('')||'<div class="mu">Sin votos</div>'}</div>
+  <button class="btn g" onclick="location.reload()">Nueva ronda</button>`,1)}}
+
+function player(){
+ const kI='imp_id_'+ROOM,kN='imp_n_'+ROOM;let id=null,nm=null;
+ try{id=localStorage.getItem(kI);nm=localStorage.getItem(kN)}catch(e){}
+ if(id&&nm)return run();
+ view(`<div class="card"><label>Tu nombre</label><input id="nm" maxlength="24" placeholder="Nombre y inicial del apellido" autocomplete="off"><button class="btn" id="jn">Entrar</button><p class="err" id="er"></p></div>`);
+ $('#jn').onclick=async()=>{const n=$('#nm').value.trim();if(!n)return;
+  id=Math.random().toString(36).slice(2,10);
+  const ok=await api('names/'+id,'PUT',n);
+  if(!ok){$('#er').textContent='No pude conectar. Revisa tu internet e intenta de nuevo.';return}
+  try{localStorage.setItem(kI,id);localStorage.setItem(kN,n)}catch(e){}
+  nm=n;run()};
+ function run(){let shown='',role=null,meta=null,myVote=null;
+  const card=()=>{const r=$('#r');let to;const imp=role==='i';
+   const d=o=>r.innerHTML=o?`<div class="mu">${imp?'Tu rol':'Tu palabra'}</div><div class="sm">${imp?'Impostor':esc(meta.word)}</div><div class="mu">Categoría: ${esc(meta.cat)}</div>`:'<div class="hint">Mantén presionado</div>';
+   const sh=e=>{e.preventDefault();d(1);clearTimeout(to);to=setTimeout(()=>d(0),4000)},hd=()=>{d(0);clearTimeout(to)};
+   r.addEventListener('pointerdown',sh);['pointerup','pointerleave','pointercancel'].forEach(v=>r.addEventListener(v,hd));r.oncontextmenu=e=>e.preventDefault();d(0)};
+  const render=async()=>{
+   if(shown==='lobby')view(`<div class="card c"><div class="big">Hola, ${esc(nm)}</div><p class="mu">Esperando a que el anfitrión inicie la partida.</p></div>`);
+   else if(shown==='play'){role=await api('roles/'+id);
+    if(!role){view('<div class="card c"><p class="mu">Llegaste después de que empezó la partida. Espera la siguiente ronda.</p></div>');return}
+    view('<div class="banner" id="bn"></div><p class="s">Mantén presionada la tarjeta para ver tu rol.</p><button class="reveal" id="r"></button>');card()}
+   else if(shown==='vote'){const nms=await api('names')||{};
+    view(`<div class="s2">¿Quién es el impostor?</div>${Object.keys(nms).filter(i=>i!==id).map(i=>`<button class="opt${myVote===i?' sel':''}" data-i="${i}">${esc(nms[i])}</button>`).join('')}<p class="mu c" id="vm" style="text-align:center">${myVote?'Voto registrado':'Toca un nombre para votar'}</p>`);
+    document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const ok=await api('votes/'+id,'PUT',b.dataset.i);if(!ok)return;myVote=b.dataset.i;document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b));$('#vm').textContent='Voto registrado. Puedes cambiarlo.'})}
+   else if(shown==='result'){const r=meta.result||{};
+    view(`<div class="card c"><div class="mu">Más votado</div><div class="big">${esc(r.top||'Nadie')}</div>${r.top?`<div class="${r.topImp?'ok':'bad'}">${r.topImp?'Era impostor':'No era impostor'}</div>`:''}</div><div class="card"><div class="mu">Impostores</div><div class="chips">${(r.imp||[]).map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu" style="margin-top:14px">Palabra: <b>${esc(r.word)}</b></div></div>`)}};
+  const poll=async()=>{const m=await api('meta');if(!m)return;meta=m;
+   if(m.phase!==shown){shown=m.phase;await render()}
+   if(shown==='play'){const b=$('#bn');if(b){const mine=m.turn===id;b.className='banner'+(mine?' me':'');b.textContent=m.turn?(mine?'Es tu turno':'Turno de '+m.turnName):'Preparando turnos'}}};
+  poll();setInterval(poll,2000)}
+}
+</script></body></html>
