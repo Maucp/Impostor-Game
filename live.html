@@ -40,6 +40,9 @@ input,select{width:100%;padding:13px;border-radius:10px;border:1px solid var(--b
 .s2{font-size:22px;font-weight:700;text-align:center;margin-bottom:14px}
 .opt{display:block;width:100%;padding:15px;margin-bottom:10px;border-radius:12px;border:1px solid var(--bd);background:var(--cd);color:var(--tx);font-size:17px;font-weight:600;cursor:pointer}
 .chk{display:flex;gap:10px;align-items:center;color:var(--tx);font-size:14px;margin-top:14px}.chk input{width:auto}
+.ghost{display:block;margin:18px auto 0;background:none;border:0;color:var(--mu);font-size:13px;opacity:.55;padding:8px;text-decoration:underline;cursor:pointer}
+.ov{position:fixed;inset:0;background:rgba(5,6,9,.93);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}
+.toast{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);max-width:496px;margin:0 auto;background:var(--ac);color:#fff;padding:12px 14px;border-radius:12px;text-align:center;font-weight:600;z-index:30}
 .opt.sel{border-color:var(--ac);background:#1b2150}
 </style></head>
 <body><main id="app"></main>
@@ -67,7 +70,20 @@ const H=new URLSearchParams(location.hash.slice(1));
 const wake=()=>{try{navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake()});
 let S=null;
-const endInfo=w=>({w,imp:S.ids.filter(i=>S.roles[i]==='i').map(i=>S.names[i]),word:S.word,cat:S.cat});
+const endInfo=w=>({w,imp:S.ids.filter(i=>S.roles[i]==='i').map(i=>S.names[i]),word:S.word,cat:S.cat,by:S.by||''});
+const norm=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+async function checkGuesses(){
+ if(!S||!['play','vote'].includes(S.phase))return;
+ const g=await api('guesses');if(!g)return;
+ for(const id of Object.keys(g)){
+  await api('guesses/'+id,'DELETE');
+  if(!['play','vote'].includes(S.phase)||!S.ids.includes(id)||S.dead[id]||S.roles[id]!=='i')continue;
+  if(norm(g[id])===norm(S.word)){S.by=S.names[id];finish('imp');return}
+  S.dead[id]=true;S.al=S.ids.filter(i=>!S.dead[i]);
+  const imps=S.al.filter(i=>S.roles[i]==='i').length,win=imps===0?'civ':S.al.length<=Math.ceil(S.N*.2)?'imp':'';
+  await api('meta','PATCH',{dead:S.dead,alive:S.al.length,impLeft:imps,alert:{n:Date.now(),name:S.names[id]}});
+  if(win){finish(win);return}
+  if(S.phase==='play'&&S.refresh)S.refresh()}}
 
 function hostSetup(){
  wake();let sv='';try{sv=localStorage.getItem('imp_db')||''}catch(e){}
@@ -100,19 +116,20 @@ async function begin(names,cfg){
  const ids=Object.keys(names),k=Math.min(cfg.k,ids.length-2),imp=new Set(shuf(ids).slice(0,k));
  const cat=cfg.c==='*'?shuf(Object.keys(CATS))[0]:cfg.c,word=shuf(CATS[cat])[0],roles={};
  ids.forEach(i=>roles[i]=imp.has(i)?'i':'c');
- S={ids,names,roles,dead:{},round:0,N:ids.length,cfg,cat,word,gen:(S?S.gen:0)+1,al:ids};
- await api('roles','PUT',roles);await api('votes','DELETE');
+ const og=S;if(og){clearInterval(og.gt);clearInterval(og.tick);clearInterval(og.vt)}
+ S={ids,names,roles,dead:{},round:0,N:ids.length,cfg,cat,word,gen:(og?og.gen:0)+1,al:ids,by:'',phase:'wait'};S.gt=setInterval(checkGuesses,1500);
+ await api('roles','PUT',roles);await api('votes','DELETE');await api('guesses','DELETE');
  await api('meta','PUT',{phase:'wait',gen:S.gen,round:0,cat,word});
  round()}
 
-function round(){S.round++;
+function round(){S.round++;S.phase='play';
  const al=S.ids.filter(i=>!S.dead[i]);S.al=al;
  api('meta','PATCH',{phase:'play',round:S.round,alive:al.length,impLeft:al.filter(i=>S.roles[i]==='i').length,last:null,end:null,turn:'',turnName:'',nextId:'',nextName:''});
  game(shuf(al))}
 
-function finish(w){api('meta','PATCH',{phase:'end',end:endInfo(w)});hostEnd(w)}
+function finish(w){S.phase='end';clearInterval(S.tick);clearInterval(S.vt);api('meta','PATCH',{phase:'end',end:endInfo(w)});hostEnd(w)}
 function hostEnd(w){const e=endInfo(w);
- view(`<div class="card c"><div class="mu">${w==='civ'?'Ganan los tripulantes':w==='imp'?'Ganan los impostores':'Partida terminada'}</div><div class="big">Impostores</div><div class="chips" style="justify-content:center">${e.imp.map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu">Categoría: ${esc(e.cat)} · Palabra: <b>${esc(e.word)}</b></div></div>
+ view(`<div class="card c"><div class="mu">${w==='civ'?'Ganan los tripulantes':w==='imp'?'Ganan los impostores':'Partida terminada'}</div>${e.by?`<div class="mu">${esc(e.by)} adivinó la palabra</div>`:''}<div class="big">Impostores</div><div class="chips" style="justify-content:center">${e.imp.map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu">Categoría: ${esc(e.cat)} · Palabra: <b>${esc(e.word)}</b></div></div>
  <button class="btn" id="ag">Jugar otra vez con los mismos</button><button class="btn g" onclick="location.reload()">Nueva sala</button>`,1);
  $('#ag').onclick=()=>begin(S.names,S.cfg)}
 
@@ -124,27 +141,28 @@ function game(q){const{sc,au}=S.cfg;let tick=null;
   setT(q[0]);
   view(`<div class="card c"><div class="mu">Ronda ${S.round} · Vivos ${S.al.length}</div><div class="mu" style="margin-top:8px">Turno de</div><div class="turn">${esc(S.names[q[0]])}</div><div class="mu">Sigue: ${q[1]?esc(S.names[q[1]]):'nadie'} · Faltan ${q.length}</div><div class="tm" id="tm"></div>
   <div class="row"><button class="btn" id="nx">Siguiente</button><button class="btn g" id="ps">Pasar turno</button></div></div><button class="btn g" id="vt">Abrir votación ahora</button><button class="btn g" id="en">Terminar partida</button>`,1);
-  if(sc>0){let t=sc;const tm=$('#tm');tm.textContent=t+' s';tick=setInterval(()=>{t--;if(t<=0){clearInterval(tick);if(au)nx();else tm.textContent='Tiempo'}else tm.textContent=t+' s'},1000)}
+  if(sc>0){let t=sc;const tm=$('#tm');tm.textContent=t+' s';S.tick=tick=setInterval(()=>{t--;if(t<=0){clearInterval(tick);if(au)nx();else tm.textContent='Tiempo'}else tm.textContent=t+' s'},1000)}
   $('#nx').onclick=nx;$('#ps').onclick=()=>{q.push(q.shift());draw()};
   $('#vt').onclick=()=>{clearInterval(tick);vote()};$('#en').onclick=()=>{clearInterval(tick);finish('stop')}};
  document.onkeydown=e=>{if([' ','Enter','ArrowRight'].includes(e.key)&&$('#nx')){e.preventDefault();$('#nx').click()}};
+ S.refresh=()=>{const f=q[0];q=q.filter(i=>!S.dead[i]);if(q[0]!==f||!q.length)draw();else setT(q[0])};
  draw()}
 
 function vote(){
- document.onkeydown=null;const tot=S.al.length;
+ document.onkeydown=null;S.phase='vote';const tot=S.al.length;
  api('votes','DELETE').then(()=>api('meta','PATCH',{phase:'vote'}));
- view(`<div class="card c"><div class="mu">Ronda ${S.round} · Votación</div><div class="big"><span id="vc">0</span> de ${tot}</div><div class="bar"><i id="bf"></i></div><button class="btn" id="cl">Cerrar votación</button></div><button class="btn g" id="en">Terminar partida</button>`,1);
+ view(`<div class="card c"><div class="mu">Ronda ${S.round} · Votación</div><div class="big"><span id="vc">0</span> de <span id="vtt">${tot}</span></div><div class="bar"><i id="bf"></i></div><button class="btn" id="cl">Cerrar votación</button></div><button class="btn g" id="en">Terminar partida</button>`,1);
  const cv=v=>Object.entries(v).filter(([a,b])=>S.ids.includes(a)&&!S.dead[a]&&S.ids.includes(b)&&!S.dead[b]);
- const t=setInterval(async()=>{const v=await api('votes')||{},n=cv(v).length;$('#vc').textContent=n;$('#bf').style.width=Math.min(100,n/tot*100)+'%'},2000);
+ const t=S.vt=setInterval(async()=>{const v=await api('votes')||{},n=cv(v).length,tt=S.al.length;$('#vc').textContent=n;$('#vtt').textContent=tt;$('#bf').style.width=Math.min(100,n/tt*100)+'%'},2000);
  $('#en').onclick=()=>{clearInterval(t);finish('stop')};
- $('#cl').onclick=async()=>{clearInterval(t);
+ $('#cl').onclick=async()=>{clearInterval(t);S.phase='round';
   const v=await api('votes')||{},cnt={};cv(v).forEach(([a,b])=>cnt[b]=(cnt[b]||0)+1);
   const rank=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]),out=rank.length&&!(rank[1]&&cnt[rank[1]]===cnt[rank[0]])?rank[0]:null;
   if(out)S.dead[out]=true;
   const al=S.ids.filter(i=>!S.dead[i]),imps=al.filter(i=>S.roles[i]==='i').length;
   const win=imps===0?'civ':al.length<=Math.ceil(S.N*.2)?'imp':'';
   const last={name:out?S.names[out]:'',imp:out?S.roles[out]==='i':false,tie:!out};
-  S.al=al;
+  S.al=al;S.phase=win?'end':'round';
   await api('meta','PATCH',{dead:S.dead,alive:al.length,impLeft:imps,last,phase:win?'end':'round',end:win?endInfo(win):null});
   const list=rank.map(i=>`<div class="vr"><span>${esc(S.names[i])}</span><b>${cnt[i]}</b></div>`).join('')||'<div class="mu">Sin votos</div>';
   view(`<div class="card c"><div class="mu">${last.tie?'Empate o sin votos':'Eliminado'}</div><div class="big">${last.tie?'Nadie sale':esc(last.name)}</div>${last.tie?'':`<div class="${last.imp?'ok':'bad'}">${last.imp?'Era impostor':'No era impostor'}</div>`}<div class="mu" style="margin-top:10px">Quedan ${al.length} jugadores · ${imps} impostores</div></div>
@@ -162,8 +180,15 @@ function player(){
   if(!ok){$('#er').textContent='No pude conectar. Revisa tu internet e intenta de nuevo.';return}
   try{localStorage.setItem(kI,id);localStorage.setItem(kN,n)}catch(e){}
   nm=n;run()};
- function run(){wake();let key='',role=null,meta=null,myVote=null;
+ function run(){wake();let key='',role=null,meta=null,myVote=null,lastAl;
   const isDead=()=>!!(meta.dead&&meta.dead[id]);
+  const toast=h=>{const t=document.createElement('div');t.className='toast';t.innerHTML=h;document.body.appendChild(t);setTimeout(()=>t.remove(),5000)};
+  const guessUI=()=>{const o=document.createElement('div');o.className='ov';
+   o.innerHTML='<div class="card" style="width:100%;max-width:420px"><div class="s2">Adivinar la palabra</div><p class="mu" style="text-align:center">Si aciertas, ganan los impostores. Si fallas, quedas eliminado.</p><input id="gw" placeholder="Escribe la palabra" autocomplete="off"><button class="btn" id="gs2">Enviar</button><button class="btn g" id="gc">Cancelar</button><p class="mu" id="gm" style="text-align:center"></p></div>';
+   document.body.appendChild(o);const x=()=>o.remove();$('#gc').onclick=x;
+   $('#gs2').onclick=async()=>{const t=$('#gw').value.trim();if(!t)return;
+    if(role!=='i'){$('#gm').textContent='Solo los impostores pueden adivinar. Tu intento no cuenta.';setTimeout(x,2500);return}
+    const ok=await api('guesses/'+id,'PUT',t);$('#gm').textContent=ok?'Enviado. Esperando resultado...':'No se pudo enviar, intenta de nuevo.';if(ok)setTimeout(x,1500)}};
   const stat=()=>`<p class="s" id="stt">Ronda ${meta.round} · Vivos ${meta.alive} · Impostores ${meta.impLeft}</p>`;
   const card=()=>{const r=$('#r');let to;const imp=role==='i';
    const d=o=>r.innerHTML=o?`<div class="mu">${imp?'Tu rol':'Tu palabra'}</div><div class="sm">${imp?'Impostor':esc(meta.word)}</div><div class="mu">Categoría: ${esc(meta.cat)}</div>`:'<div class="hint">Mantén presionado</div>';
@@ -173,19 +198,20 @@ function player(){
    if(p==='lobby')view(`<div class="card c"><div class="big">Hola, ${esc(nm)}</div><p class="mu">Esperando a que el anfitrión inicie la partida.</p></div>`);
    else if(p==='play'){role=await api('roles/'+id);
     if(!role){view('<div class="card c"><p class="mu">Llegaste después de que empezó la partida. Espera la siguiente.</p></div>');return}
-    view(`<div class="banner" id="bn"></div>${stat()}`+(isDead()?'<div class="card c"><div class="big">Estás eliminado</div><p class="mu">Sigue la partida como espectador.</p></div>':'<p class="s">Mantén presionada la tarjeta para ver tu rol.</p><button class="reveal" id="r"></button>'));
-    if(!isDead())card()}
+    view(`<div class="banner" id="bn"></div>${stat()}`+(isDead()?'<div class="card c"><div class="big">Estás eliminado</div><p class="mu">Sigue la partida como espectador.</p></div>':'<p class="s">Mantén presionada la tarjeta para ver tu rol.</p><button class="reveal" id="r"></button><button class="ghost" id="gb">Adivinar palabra</button>'));
+    if(!isDead()){card();$('#gb').onclick=guessUI}}
    else if(p==='vote'){const nms=await api('names')||{};myVote=null;
     if(!role||isDead()){view(`<div class="card c"><div class="big">${role?'Estás eliminado':'Votación en curso'}</div><p class="mu">Espera el resultado de la votación.</p></div>`);return}
-    view(`<div class="s2">¿Quién es el impostor?</div>${Object.keys(nms).filter(i=>i!==id&&!(meta.dead&&meta.dead[i])).map(i=>`<button class="opt" data-i="${i}">${esc(nms[i])}</button>`).join('')}<p class="mu" id="vm" style="text-align:center">Toca un nombre para votar</p>`);
-    document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const ok=await api('votes/'+id,'PUT',b.dataset.i);if(!ok)return;myVote=b.dataset.i;document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b));$('#vm').textContent='Voto registrado. Puedes cambiarlo.'})}
+    view(`<div class="s2">¿Quién es el impostor?</div>${Object.keys(nms).filter(i=>i!==id&&!(meta.dead&&meta.dead[i])).map(i=>`<button class="opt" data-i="${i}">${esc(nms[i])}</button>`).join('')}<p class="mu" id="vm" style="text-align:center">Toca un nombre para votar</p><button class="ghost" id="gb">Adivinar palabra</button>`);
+    $('#gb').onclick=guessUI;document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const ok=await api('votes/'+id,'PUT',b.dataset.i);if(!ok)return;myVote=b.dataset.i;document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b));$('#vm').textContent='Voto registrado. Puedes cambiarlo.'})}
    else if(p==='round'){const l=meta.last||{};
     view(`<div class="card c"><div class="mu">${l.tie?'Empate o sin votos':'Eliminado'}</div><div class="big">${l.tie?'Nadie sale':esc(l.name)}</div>${l.tie?'':`<div class="${l.imp?'ok':'bad'}">${l.imp?'Era impostor':'No era impostor'}</div>`}</div>${stat()}<p class="mu" style="text-align:center">${isDead()?'Estás eliminado. ':''}Esperando la siguiente ronda.</p>`)}
    else if(p==='end'){const e=meta.end||{imp:[]};
-    view(`<div class="card c"><div class="mu">${e.w==='civ'?'Ganan los tripulantes':e.w==='imp'?'Ganan los impostores':'Partida terminada'}</div><div class="big">Impostores</div><div class="chips" style="justify-content:center">${(e.imp||[]).map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu">Palabra: <b>${esc(e.word)}</b></div></div><p class="mu" style="text-align:center">Si el anfitrión juega otra vez, esta pantalla se actualiza sola.</p>`)}
+    view(`<div class="card c"><div class="mu">${e.w==='civ'?'Ganan los tripulantes':e.w==='imp'?'Ganan los impostores':'Partida terminada'}</div>${e.by?`<div class="mu">${esc(e.by)} adivinó la palabra</div>`:''}<div class="big">Impostores</div><div class="chips" style="justify-content:center">${(e.imp||[]).map(n=>`<span>${esc(n)}</span>`).join('')}</div><div class="mu">Palabra: <b>${esc(e.word)}</b></div></div><p class="mu" style="text-align:center">Si el anfitrión juega otra vez, esta pantalla se actualiza sola.</p>`)}
    else view('<div class="card c"><p class="mu">Preparando la partida.</p></div>')};
   const poll=async()=>{const m=await api('meta');if(!m)return;meta=m;
-   const k=m.phase+':'+m.gen+':'+m.round;
+   if(m.alert){if(lastAl!==undefined&&m.alert.n!==lastAl)toast(esc(m.alert.name)+' intentó adivinar la palabra y falló. Queda eliminado.');lastAl=m.alert.n}else if(lastAl===undefined)lastAl=0;
+   const k=m.phase+':'+m.gen+':'+m.round+':'+(m.dead&&m.dead[id]?1:0);
    if(k!==key){key=k;await render()}
    if(m.phase==='play'){const b=$('#bn');if(b){const mine=m.turn===id;b.className='banner'+(mine?' me':'');b.innerHTML=(m.turn?(mine?'Es tu turno':'Turno de '+esc(m.turnName)):'Preparando turnos')+(m.nextId?`<div style="font-weight:400;font-size:13px;margin-top:2px">${m.nextId===id?'Sigues tú':'Sigue: '+esc(m.nextName)}</div>`:'')}}};
   poll();setInterval(poll,2000)}
