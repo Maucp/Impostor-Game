@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Impostor</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f4ef;--card:#fff;--tx:#1b1b1f;--mu:#6b6b73;--ac:#5b4bdb;--ac2:#fff;--bd:#e2dfd7;--bad:#d6334a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15151a;--card:#1f1f27;--tx:#f1f1f4;--mu:#9a9aa6;--ac:#8c7dff;--ac2:#10101a;--bd:#32323d;--bad:#ff5d73}}
+:root[data-theme="dark"]{--bg:#15151a;--card:#1f1f27;--tx:#f1f1f4;--mu:#9a9aa6;--ac:#8c7dff;--ac2:#10101a;--bd:#32323d;--bad:#ff5d73}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.4}
+main{max-width:480px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:26px;margin:0 0 4px}
+p.s{color:var(--mu);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--mu);margin:10px 0 4px}
+select,input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:16px}
+button{font:inherit;cursor:pointer}
+.btn{width:100%;padding:14px;border:0;border-radius:12px;background:var(--ac);color:var(--ac2);font-weight:700;font-size:16px;margin-top:14px}
+.btn.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+.row{display:flex;gap:10px}.row>div{flex:1}
+#qr{display:flex;justify-content:center;padding:12px;background:#fff;border-radius:12px;margin:10px 0}
+.link{word-break:break-all;font-size:12px;color:var(--mu)}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.grid button{padding:14px 0;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:18px;font-weight:600}
+.reveal{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border-radius:18px;border:2px dashed var(--bd);background:var(--card);padding:20px;width:100%;color:var(--tx)}
+.big{font-size:38px;font-weight:800;margin:6px 0;word-break:break-word}
+.bad{color:var(--bad)}
+.mu{color:var(--mu);font-size:14px}
+.huge{font-size:84px;line-height:1}
+.row .btn{flex:1}
+.tm{font-size:20px;margin:6px 0;color:var(--mu)}
+.reveal{user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
+.sm{font-size:30px;font-weight:700;margin:8px 0;word-break:break-word}
+</style></head>
+<body><main id="app"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const CATS={
+"Deportes":["Fútbol","Basquetbol","Natación","Box","Tenis","Voleibol","Béisbol","Ciclismo","Lucha libre","Atletismo","Gimnasia","Surf"],
+"Famosos":["Shakira","Bad Bunny","Messi","Cristiano Ronaldo","Eugenio Derbez","Taylor Swift","Peso Pluma","Karol G","Checo Pérez","Canelo Álvarez","Luisito Comunica","Ibai"],
+"Videojuegos":["Minecraft","Fortnite","Mario Kart","FIFA","Among Us","Zelda","Pokémon","Free Fire","League of Legends","GTA","Valorant","Roblox"],
+"Comida":["Tacos al pastor","Pizza","Sushi","Pozole","Hamburguesa","Chilaquiles","Tamales","Helado","Elote","Tortas","Ramen","Enchiladas"],
+"Animales":["Perro","Gato","Ajolote","Delfín","Jirafa","Pingüino","Tiburón","Mapache","Capibara","Pulpo","Loro","Panda"],
+"Películas y series":["Shrek","Coco","Avengers","Harry Potter","Titanic","Breaking Bad","Stranger Things","El Rey León","Spider-Man","Toy Story","Los Simpson","Squid Game"],
+"Anime":["Naruto","Dragon Ball","One Piece","Death Note","Pokémon","Attack on Titan","Demon Slayer","Sailor Moon","Chainsaw Man","My Hero Academia","Bleach","Jujutsu Kaisen"],
+"Lugares":["Playa","Hospital","Escuela","Aeropuerto","Cine","Metro","Zoológico","Gimnasio","Biblioteca","Panadería","Estadio","Tianguis"],
+"Profesiones":["Psicólogo","Doctor","Bombero","Chef","Piloto","Maestro","Policía","Dentista","Youtuber","Veterinario","Electricista","Astronauta"]
+};
+const $=s=>document.querySelector(s),app=$('#app');
+function xmur(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19}h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return(h^=h>>>16)>>>0}
+function rngFrom(seed){let a=xmur(seed);return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function game(seed,n,k,c){const r=rngFrom(seed),names=Object.keys(CATS);
+ const cat=c==='*'?names[Math.floor(r()*names.length)]:c;
+ const word=CATS[cat][Math.floor(r()*CATS[cat].length)];
+ const a=Array.from({length:n},(_,i)=>i+1);
+ for(let i=n-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+ return{cat,word,imp:a.slice(0,k).sort((x,y)=>x-y)}}
+const P=new URLSearchParams(location.hash.slice(1));
+if(P.get('s'))player();else host();
+
+function host(){
+ app.innerHTML=`<h1>Impostor 🕵️</h1><p class="s">Para romper el hielo en grupo. Tú armas la ronda, todos entran desde su cel.</p>
+ <div class="card"><div class="row"><div><label>Personas</label><input id="n" type="number" min="3" max="60" value="30"></div>
+ <div><label>Impostores</label><input id="k" type="number" min="1" max="10" value="4"></div></div>
+ <label>Categoría</label><select id="c"><option value="*">Aleatoria</option>${Object.keys(CATS).map(x=>`<option>${x}</option>`).join('')}</select>
+ <button class="btn" id="go">Nueva ronda</button></div><div id="out"></div>`;
+ $('#go').onclick=()=>{
+  const n=Math.max(3,Math.min(60,+$('#n').value||30)),k=Math.max(1,Math.min(Math.floor(n/2),+$('#k').value||4)),c=$('#c').value;
+  const seed=Math.random().toString(36).slice(2,9);
+  const link=location.href.split('#')[0]+'#'+new URLSearchParams({s:seed,n,k,c});
+  const g=game(seed,n,k,c);
+  $('#out').innerHTML=`<div class="card"><b>Escaneen o abran este link</b><div id="qr"></div><div class="link">${link}</div>
+  <button class="btn g" id="cp">Copiar link</button>
+  <p class="mu">Cada quien elige un número distinto del 1 al ${n}. Para ver su rol mantienen presionada la tarjeta (se oculta sola).</p></div>
+  <div class="card"><b>Turnos</b><div id="tn"><p class="mu">Cuando todos tengan su rol, empieza.</p><button class="btn" id="st">Empezar turnos</button></div></div>
+  <div class="card"><button class="btn g" id="rv" style="margin-top:0">Revelar impostores</button><div id="rvo"></div></div>`;
+  try{new QRCode($('#qr'),{text:link,width:220,height:220})}catch(e){$('#qr').remove()}
+  $('#cp').onclick=()=>{try{navigator.clipboard.writeText(link);$('#cp').textContent='Copiado'}catch(e){}};
+  let q=[],tick=null,sure=false;
+  const draw=()=>{clearInterval(tick);
+   if(!q.length){$('#tn').innerHTML='<div class="big">🗳️</div><p>Terminaron los turnos. ¡A votar!</p>';return}
+   $('#tn').innerHTML=`<div class="mu">Turno del número</div><div class="big huge">${q[0]}</div><div class="mu">Sigue: ${q[1]||'nadie'} · Faltan ${q.length}</div><div class="tm" id="tm"></div>
+   <div class="row"><button class="btn" id="nx">Siguiente</button><button class="btn g" id="ps">Pasar turno</button></div><p class="mu">Pasar turno lo manda al final de la fila. Atajo: barra espaciadora o flecha derecha.</p>`;
+   let t=10;const tm=$('#tm');tm.textContent=t+' s';
+   tick=setInterval(()=>{t--;tm.textContent=t>0?t+' s':'Tiempo';if(t<=0)clearInterval(tick)},1000);
+   $('#nx').onclick=()=>{q.shift();draw()};
+   $('#ps').onclick=()=>{q.push(q.shift());draw()};
+  };
+  $('#st').onclick=()=>{q=Array.from({length:n},(_,i)=>i+1);for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[q[i],q[j]]=[q[j],q[i]]}draw()};
+  document.onkeydown=e=>{if([' ','Enter','ArrowRight'].includes(e.key)&&$('#nx')){e.preventDefault();$('#nx').click()}};
+  $('#rv').onclick=()=>{if(!sure){sure=true;$('#rv').textContent='¿Seguro? Toca otra vez para mostrar';return}
+   $('#rvo').innerHTML=`<p>Categoría: <b>${g.cat}</b><br>Palabra: <b>${g.word}</b><br>Impostores: <b class="bad">${g.imp.join(', ')}</b></p>`;$('#rv').remove()};
+ };
+}
+
+function player(){
+ const seed=P.get('s'),n=+P.get('n'),k=+P.get('k'),c=P.get('c'),g=game(seed,n,k,c),key='imp_'+seed;
+ let num=null;try{num=+localStorage.getItem(key)||null}catch(e){}
+ if(!num){
+  app.innerHTML=`<h1>Elige tu número</h1><p class="s">Que no se repita con nadie. Una vez que lo elijas ya no se puede cambiar.</p><div class="grid">${Array.from({length:n},(_,i)=>`<button data-n="${i+1}">${i+1}</button>`).join('')}</div>`;
+  app.querySelectorAll('button').forEach(b=>b.onclick=()=>{num=+b.dataset.n;try{localStorage.setItem(key,num)}catch(e){}show()});
+ }else show();
+ function show(){
+  const imp=g.imp.includes(num);let open=false,to=null;
+  app.innerHTML=`<h1>Jugador ${num}</h1><p class="s">Mantén presionada la tarjeta para ver tu rol. Se oculta sola a los 4 segundos. Tápala con la mano si hay alguien cerca.</p><button class="reveal" id="r"></button>`;
+  const r=$('#r'),draw=()=>{r.innerHTML=open?`<div class="mu">${imp?'Tu rol':'Tu palabra'}</div><div class="sm">${imp?'Impostor':g.word}</div><div class="mu">Categoría: ${g.cat}</div>`:`<div class="big">👆</div><div class="mu">Mantén presionado</div>`};
+  const show=e=>{e.preventDefault();open=true;draw();clearTimeout(to);to=setTimeout(hide,4000)},hide=()=>{open=false;draw();clearTimeout(to)};
+  r.addEventListener('pointerdown',show);['pointerup','pointerleave','pointercancel'].forEach(ev=>r.addEventListener(ev,hide));
+  r.oncontextmenu=e=>e.preventDefault();draw();
+ }
+}
+</script></body></html>
