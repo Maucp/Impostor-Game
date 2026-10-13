@@ -73,11 +73,12 @@ let S=null;
 const endInfo=w=>({w,imp:S.ids.filter(i=>S.roles[i]==='i').map(i=>S.names[i]),word:S.word,cat:S.cat,by:S.by||''});
 const norm=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 async function checkGuesses(){
- if(!S||!['play','vote'].includes(S.phase))return;
+ if(!S||S.phase!=='play')return;
  const g=await api('guesses');if(!g)return;
  for(const id of Object.keys(g)){
   await api('guesses/'+id,'DELETE');
-  if(!['play','vote'].includes(S.phase)||!S.ids.includes(id)||S.dead[id]||S.roles[id]!=='i')continue;
+  if(S.phase!=='play'||!S.ids.includes(id)||S.dead[id]||S.roles[id]!=='i')continue;
+  if(id!==S.cur&&!(id===S.prev&&Date.now()-S.prevAt<4000))continue;
   if(norm(g[id])===norm(S.word)){S.by=S.names[id];finish('imp');return}
   S.dead[id]=true;S.al=S.ids.filter(i=>!S.dead[i]);
   const imps=S.al.filter(i=>S.roles[i]==='i').length,win=imps===0?'civ':S.al.length<=Math.ceil(S.N*.2)?'imp':'';
@@ -134,7 +135,7 @@ function hostEnd(w){const e=endInfo(w);
  $('#ag').onclick=()=>begin(S.names,S.cfg)}
 
 function game(q){const{sc,au}=S.cfg;let tick=null;
- const setT=i=>api('meta','PATCH',{turn:i||'',turnName:i?S.names[i]:'',nextId:q[1]||'',nextName:q[1]?S.names[q[1]]:''});
+ const setT=i=>{S.prev=S.cur;S.prevAt=Date.now();S.cur=i||'';return api('meta','PATCH',{turn:i||'',turnName:i?S.names[i]:'',nextId:q[1]||'',nextName:q[1]?S.names[q[1]]:''})};
  const nx=()=>{q.shift();draw()};
  const draw=()=>{clearInterval(tick);
   if(!q.length){setT('');view(`<div class="card c"><div class="mu">Ronda ${S.round}</div><div class="big">Hora de votar</div><button class="btn" id="vt">Abrir votación</button></div><button class="btn g" id="en">Terminar partida</button>`,1);$('#vt').onclick=vote;$('#en').onclick=()=>finish('stop');return}
@@ -198,12 +199,12 @@ function player(){
    if(p==='lobby')view(`<div class="card c"><div class="big">Hola, ${esc(nm)}</div><p class="mu">Esperando a que el anfitrión inicie la partida.</p></div>`);
    else if(p==='play'){role=await api('roles/'+id);
     if(!role){view('<div class="card c"><p class="mu">Llegaste después de que empezó la partida. Espera la siguiente.</p></div>');return}
-    view(`<div class="banner" id="bn"></div>${stat()}`+(isDead()?'<div class="card c"><div class="big">Estás eliminado</div><p class="mu">Sigue la partida como espectador.</p></div>':'<p class="s">Mantén presionada la tarjeta para ver tu rol.</p><button class="reveal" id="r"></button><button class="ghost" id="gb">Adivinar palabra</button>'));
+    view(`<div class="banner" id="bn"></div>${stat()}`+(isDead()?'<div class="card c"><div class="big">Estás eliminado</div><p class="mu">Sigue la partida como espectador.</p></div>':'<p class="s">Mantén presionada la tarjeta para ver tu rol.</p><button class="reveal" id="r"></button><button class="ghost" id="gb" style="display:none">Adivinar palabra</button>'));
     if(!isDead()){card();$('#gb').onclick=guessUI}}
    else if(p==='vote'){const nms=await api('names')||{};myVote=null;
     if(!role||isDead()){view(`<div class="card c"><div class="big">${role?'Estás eliminado':'Votación en curso'}</div><p class="mu">Espera el resultado de la votación.</p></div>`);return}
-    view(`<div class="s2">¿Quién es el impostor?</div>${Object.keys(nms).filter(i=>i!==id&&!(meta.dead&&meta.dead[i])).map(i=>`<button class="opt" data-i="${i}">${esc(nms[i])}</button>`).join('')}<p class="mu" id="vm" style="text-align:center">Toca un nombre para votar</p><button class="ghost" id="gb">Adivinar palabra</button>`);
-    $('#gb').onclick=guessUI;document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const ok=await api('votes/'+id,'PUT',b.dataset.i);if(!ok)return;myVote=b.dataset.i;document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b));$('#vm').textContent='Voto registrado. Puedes cambiarlo.'})}
+    view(`<div class="s2">¿Quién es el impostor?</div>${Object.keys(nms).filter(i=>i!==id&&!(meta.dead&&meta.dead[i])).map(i=>`<button class="opt" data-i="${i}">${esc(nms[i])}</button>`).join('')}<p class="mu" id="vm" style="text-align:center">Toca un nombre para votar</p>`);
+    document.querySelectorAll('.opt').forEach(b=>b.onclick=async()=>{const ok=await api('votes/'+id,'PUT',b.dataset.i);if(!ok)return;myVote=b.dataset.i;document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b));$('#vm').textContent='Voto registrado. Puedes cambiarlo.'})}
    else if(p==='round'){const l=meta.last||{};
     view(`<div class="card c"><div class="mu">${l.tie?'Empate o sin votos':'Eliminado'}</div><div class="big">${l.tie?'Nadie sale':esc(l.name)}</div>${l.tie?'':`<div class="${l.imp?'ok':'bad'}">${l.imp?'Era impostor':'No era impostor'}</div>`}</div>${stat()}<p class="mu" style="text-align:center">${isDead()?'Estás eliminado. ':''}Esperando la siguiente ronda.</p>`)}
    else if(p==='end'){const e=meta.end||{imp:[]};
@@ -213,7 +214,7 @@ function player(){
    if(m.alert){if(lastAl!==undefined&&m.alert.n!==lastAl)toast(esc(m.alert.name)+' intentó adivinar la palabra y falló. Queda eliminado.');lastAl=m.alert.n}else if(lastAl===undefined)lastAl=0;
    const k=m.phase+':'+m.gen+':'+m.round+':'+(m.dead&&m.dead[id]?1:0);
    if(k!==key){key=k;await render()}
-   if(m.phase==='play'){const b=$('#bn');if(b){const mine=m.turn===id;b.className='banner'+(mine?' me':'');b.innerHTML=(m.turn?(mine?'Es tu turno':'Turno de '+esc(m.turnName)):'Preparando turnos')+(m.nextId?`<div style="font-weight:400;font-size:13px;margin-top:2px">${m.nextId===id?'Sigues tú':'Sigue: '+esc(m.nextName)}</div>`:'')}}};
+   if(m.phase==='play'){const g=$('#gb');if(g)g.style.display=m.turn===id?'block':'none';const b=$('#bn');if(b){const mine=m.turn===id;b.className='banner'+(mine?' me':'');b.innerHTML=(m.turn?(mine?'Es tu turno':'Turno de '+esc(m.turnName)):'Preparando turnos')+(m.nextId?`<div style="font-weight:400;font-size:13px;margin-top:2px">${m.nextId===id?'Sigues tú':'Sigue: '+esc(m.nextName)}</div>`:'')}}};
   poll();setInterval(poll,2000)}
 }
 if(H.get('r')&&H.get('d')){ROOM=H.get('r');DB=H.get('d');player()}else hostSetup();
